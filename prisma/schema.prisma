@@ -11,5 +11,40 @@ datasource db {
 }
 
 model Default {
-  id Int @id @default(autoincrement())
+  id String @id @default(uuid())
+}
+
+model User {
+  id String @id @default(uuid())
+  username String
+  authcode String
+
+  wordles Wordle[]
+  guesses Guess[]
+}
+
+model Wordle {
+  id String @id @default(uuid())
+  word String
+  max_guesses Int
+
+  created_at DateTime @default(now())
+
+  guesses Guess[]
+  
+
+  creator_id String
+  creator User @relation(fields: [creator_id], references: [id])
+}
+
+model Guess {
+  id String @id @default(uuid())
+  word String
+
+  created_at DateTime @default(now())
+
+  user_id String
+  user User @relation(fields: [user_id], references: [id])
+  wordle_id String
+  wordle Wordle @relation(fields: [wordle_id], references: [id])
 }
