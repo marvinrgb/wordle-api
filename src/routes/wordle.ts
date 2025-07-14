@@ -38,7 +38,8 @@ router.get('/', async (req: Request, res: Response) => {
                 select: {
                     username: true
                 }
-            }
+            },
+            created_at: true
         }
     });
     res.json(wordles);

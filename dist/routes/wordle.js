@@ -41,7 +41,8 @@ router.get('/', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
                     select: {
                         username: true
                     }
-                }
+                },
+                created_at: true
             }
         });
         res.json(wordles);
