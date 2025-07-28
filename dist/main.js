@@ -28,20 +28,21 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importStar(require("express"));
 const router_manager_js_1 = __importDefault(require("./routes/router-manager.js"));
+const morgan_1 = __importDefault(require("morgan"));
+const cors_1 = __importDefault(require("cors"));
 // if there a env set use it as port, if not use 3000
 const port = process.env.API_PORT ? Number(process.env.API_PORT) : 3000;
 const app = (0, express_1.default)();
 // remove express header
 app.disable('x-powered-by');
+// logging
+app.use((0, morgan_1.default)('dev'));
+// enable CORS
+app.use((0, cors_1.default)());
 // parse requestbody if in json (= make it usable)
 app.use((0, express_1.json)());
 // the same but for the query parameters
 app.use((0, express_1.urlencoded)());
-app.use((req, res, next) => {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Headers', '*');
-    next();
-});
 // forwards all requests under /api to the routeManager, wich distributes them further
 app.use('/api', router_manager_js_1.default);
 // starts the server under the specified port

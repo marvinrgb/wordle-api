@@ -25,6 +25,7 @@ model User {
 
 model Wordle {
   id String @id @default(uuid())
+  description String @default("Today's REPO password")
   word String
   max_guesses Int
 

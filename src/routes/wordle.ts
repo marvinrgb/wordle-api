@@ -1,5 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { PrismaClient, User as PrismaUser } from '@prisma/client';
+import fetch from 'node-fetch';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -7,6 +8,16 @@ const prisma = new PrismaClient();
 // Extend Express Request type to include user
 interface AuthRequest extends Request {
   user?: PrismaUser;
+}
+
+// Helper to check if a word exists in English
+async function isValidWord(word: string): Promise<boolean> {
+  try {
+    const resp = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`);
+    return resp.status === 200;
+  } catch {
+    return false;
+  }
 }
 
 // Auth middleware (for mutating routes only)
@@ -32,15 +43,28 @@ function authUser(req: AuthRequest, res: Response, next: NextFunction) {
 router.get('/', async (req: Request, res: Response) => {
   try {
     const wordles = await prisma.wordle.findMany({
-        select: {
-            id: true,
-            creator: {
-                select: {
-                    username: true
-                }
-            },
-            created_at: true
+      select: {
+        id: true,
+        created_at: true,
+        creator: {
+          select: {
+            username: true
+          }
+        },
+        max_guesses: true,
+        description: true,
+        guesses: {
+          select: {
+            word: true,
+            created_at: true,
+            user: {
+              select: {
+                username: true
+              }
+            }
+          }
         }
+      }
     });
     res.json(wordles);
   } catch (err) {
@@ -51,25 +75,26 @@ router.get('/', async (req: Request, res: Response) => {
 // Get wordle by id (public)
 router.get('/:id', async (req: Request, res: Response) => {
   try {
-    const wordle = await prisma.wordle.findUnique({ where: { id: req.params.id }, select: {
-        word: true,
-        max_guesses: true,
-        creator: {
-            select: {
-                username: true
-            }
+    const wordle = await prisma.wordle.findUnique({ where: { id: req.params.id },
+    select: {
+      id: true,
+      description: true,
+      created_at: true,
+      creator: {
+        select: {
+          username: true
         }
+      },
+      max_guesses: true,
+      word: true
     } });
     if (!wordle) {
       res.status(404).json({ error: 'Wordle not found' });
       return;
     }
-    
-    res.json({
-        max_guesses: wordle.max_guesses,
-        creator: wordle.creator.username,
-        letters: wordle.word.length
-    });
+    wordle.letters = wordle.word.length;
+    delete wordle.word;
+    res.json(wordle);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch wordle' });
   }
@@ -80,6 +105,10 @@ router.post('/', authUser, async (req: AuthRequest, res: Response) => {
   const { word, max_guesses } = req.body;
   if (!word || typeof max_guesses !== 'number') {
     res.status(400).json({ error: 'word and max_guesses (number) are required' });
+    return;
+  }
+  if (!(await isValidWord(word))) {
+    res.status(400).json({ error: 'Word does not exist in dictionary' });
     return;
   }
   try {

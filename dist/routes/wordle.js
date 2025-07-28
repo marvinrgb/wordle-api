@@ -8,11 +8,27 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const client_1 = require("@prisma/client");
+const node_fetch_1 = __importDefault(require("node-fetch"));
 const router = (0, express_1.Router)();
 const prisma = new client_1.PrismaClient();
+// Helper to check if a word exists in English
+function isValidWord(word) {
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            const resp = yield (0, node_fetch_1.default)(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`);
+            return resp.status === 200;
+        }
+        catch (_a) {
+            return false;
+        }
+    });
+}
 // Auth middleware (for mutating routes only)
 function authUser(req, res, next) {
     (() => __awaiter(this, void 0, void 0, function* () {
@@ -37,12 +53,25 @@ router.get('/', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
         const wordles = yield prisma.wordle.findMany({
             select: {
                 id: true,
+                created_at: true,
                 creator: {
                     select: {
                         username: true
                     }
                 },
-                created_at: true
+                max_guesses: true,
+                description: true,
+                guesses: {
+                    select: {
+                        word: true,
+                        created_at: true,
+                        user: {
+                            select: {
+                                username: true
+                            }
+                        }
+                    }
+                }
             }
         });
         res.json(wordles);
@@ -54,24 +83,26 @@ router.get('/', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
 // Get wordle by id (public)
 router.get('/:id', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const wordle = yield prisma.wordle.findUnique({ where: { id: req.params.id }, select: {
-                word: true,
-                max_guesses: true,
+        const wordle = yield prisma.wordle.findUnique({ where: { id: req.params.id },
+            select: {
+                id: true,
+                description: true,
+                created_at: true,
                 creator: {
                     select: {
                         username: true
                     }
-                }
+                },
+                max_guesses: true,
+                word: true
             } });
         if (!wordle) {
             res.status(404).json({ error: 'Wordle not found' });
             return;
         }
-        res.json({
-            max_guesses: wordle.max_guesses,
-            creator: wordle.creator.username,
-            letters: wordle.word.length
-        });
+        wordle.letters = wordle.word.length;
+        delete wordle.word;
+        res.json(wordle);
     }
     catch (err) {
         res.status(500).json({ error: 'Failed to fetch wordle' });
@@ -82,6 +113,10 @@ router.post('/', authUser, (req, res) => __awaiter(void 0, void 0, void 0, funct
     const { word, max_guesses } = req.body;
     if (!word || typeof max_guesses !== 'number') {
         res.status(400).json({ error: 'word and max_guesses (number) are required' });
+        return;
+    }
+    if (!(yield isValidWord(word))) {
+        res.status(400).json({ error: 'Word does not exist in dictionary' });
         return;
     }
     try {
